@@ -1,5 +1,3 @@
-# test-candidat-logistique
-
 # Paid Technical Test — Reliable Order Relay Service
 
 ## Context
@@ -49,10 +47,10 @@ simple, readable and well-reasoned solution over unnecessary complexity.
 
 ## Time expected
 
-You have up to **3 hours** if you need more time for reading, setup or testing.
+You have up to **3 hours**.
 
 AI-assisted development tools are allowed. However, you must be able to explain
-and defend every part of your implementation during the follow-up review.
+and defend every part of your implementation.
 
 ## Technical constraints
 
@@ -69,6 +67,41 @@ Do **not** add Redis, Celery, RabbitMQ, Docker, PostgreSQL, Alembic or any other
 infrastructure unless you consider it essential. If you believe one of these
 would be useful in production, explain it in `CANDIDATE_NOTES.md` instead of
 implementing it.
+
+## What is provided
+
+This repository provides only the non-business foundation:
+
+- FastAPI application entry point.
+- SQLite database setup.
+- Configuration through `.env`.
+- A simulated Warehouse API.
+- Contract tests.
+- CI workflow.
+
+You must design and implement the Order Relay Service yourself, including:
+
+- API endpoints.
+- Pydantic schemas.
+- SQLAlchemy models.
+- Database persistence.
+- Warehouse HTTP client.
+- Order processing.
+- Retry and idempotency logic.
+- Your own tests.
+
+You are free to choose your internal file structure. The existing `app/api/`,
+`app/services/` and `app/warehouse/` packages are suggestions, not requirements.
+
+## CI and expected initial failures
+
+A GitHub Actions workflow runs the contract tests on every pull request.
+
+Before implementing the service, most contract tests will fail because the
+`/orders` endpoints do not exist yet. This is expected.
+
+Your first pull request should implement the required service and make the
+contract tests pass. You must also add your own tests in `tests/candidate/`.
 
 ## Repository rules
 
@@ -90,13 +123,28 @@ The tests in `tests/contract/` validate the minimum expected behaviour. They are
 not exhaustive: you are expected to add your own tests for edge cases and
 failure scenarios.
 
+## Required order statuses
+
+Your service must expose and persist the following statuses:
+
+| Status | Meaning |
+|---|---|
+| `PENDING` | Order has been received and persisted, but not yet forwarded |
+| `PROCESSING` | Optional: order is currently being forwarded |
+| `SENT` | Warehouse accepted the order |
+| `RETRYING` | A retryable failure occurred; another attempt is scheduled |
+| `FAILED` | Maximum attempts reached, or a non-retryable error occurred |
+
+`PENDING`, `SENT`, `RETRYING` and `FAILED` are required. `PROCESSING` is optional.
+
+
 ## Getting started
 
 ### 1. Clone the repository
 
 ```bash
-git clone <[REPOSITORY_URL](https://github.com/movanex/test-candidat-logistique/>
-cd order-relay-test
+git clone https://github.com/movanex/test-candidat-logistique.git
+cd test-candidat-logistique
 ```
 
 ### 2. Create a virtual environment
@@ -173,7 +221,7 @@ http://127.0.0.1:8000/docs
 
 ## Warehouse mock
 
-The Warehouse mock exposes one endpoint:
+The public Warehouse endpoint is:
 
 ```http
 POST /warehouse/orders
@@ -185,6 +233,16 @@ It expects a JSON payload and an idempotency header:
 Idempotency-Key: <stable-order-identifier>
 ```
 
+The following endpoints are for test orchestration only:
+
+- `POST /__test/mode`
+- `POST /__test/reset`
+- `GET /warehouse/orders/{idempotency_key}`
+
+You must not call the test endpoints from production code. They are used by the
+provided contract tests and can be used locally to simulate failures.
+
+
 The Warehouse mock supports the following failure modes:
 
 | Mode | Behaviour |
@@ -194,6 +252,7 @@ The Warehouse mock supports the following failure modes:
 | `server_error` | Returns HTTP 500 before eventually succeeding |
 | `flaky` | Fails intermittently |
 | `duplicate` | Rejects a repeated delivery for the same idempotency key |
+| `permanent_server_error` | Always returns HTTP 500 |
 
 You can change the default failure mode in `.env`:
 
@@ -201,11 +260,15 @@ You can change the default failure mode in `.env`:
 WAREHOUSE_FAILURE_MODE=server_error
 ```
 
-You may also use the following test header locally:
+You may also use the following test header when calling the Warehouse mock
+directly during local manual testing:
 
 ```http
 X-Test-Failure: timeout
 ```
+
+Your Order Relay Service does **not** need to forward this header. The provided
+contract tests change the Warehouse failure mode through `POST /__test/mode`.
 
 Possible values:
 
@@ -213,6 +276,7 @@ Possible values:
 success
 timeout
 server_error
+permanent_server_error
 flaky
 duplicate
 ```
@@ -257,7 +321,7 @@ Expected behaviour:
 - Forward the order to the Warehouse asynchronously or through a background worker.
 - Use a stable identifier when calling the Warehouse so that retries do not create duplicates.
 
-Suggested response:
+Required response:
 
 ```json
 {
@@ -268,7 +332,26 @@ Suggested response:
 }
 ```
 
+The response must include at least these fields:
+
+- `id`: internal order identifier.
+- `order_id`: external order identifier received from the OMS.
+- `status`: current processing status.
+- `attempts`: number of delivery attempts already made.
+
+`GET /orders/{id}` must also expose `last_error`. It may expose additional
+fields, such as `warehouse_reference`.
+
 A status code such as `202 Accepted` is appropriate if forwarding is asynchronous.
+
+If an order with the same `order_id` has already been received, return:
+
+```http
+409 Conflict
+```
+
+The service must not create a second persisted order or schedule a second
+Warehouse delivery for that order.
 
 ### Inspect an order
 
@@ -350,6 +433,13 @@ Think carefully about the timeout case: a timeout does not necessarily mean that
 the Warehouse did not receive or process the order.
 
 ## Tests
+
+The contract tests communicate with the Warehouse mock over HTTP. Therefore,
+start the Warehouse mock before running them:
+
+```bash
+uvicorn warehouse_mock.main:app --port 9000
+```
 
 ### Run all tests
 

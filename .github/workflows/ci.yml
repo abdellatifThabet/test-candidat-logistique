@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Start Warehouse mock
+        run: |
+          nohup uvicorn warehouse_mock.main:app --host 127.0.0.1 --port 9000 > warehouse_mock.log 2>&1 &
+          echo $! > warehouse_mock.pid
+
+          for i in $(seq 1 30); do
+            if curl -s http://127.0.0.1:9000/warehouse/docs > /dev/null; then
+              echo "Warehouse mock is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Warehouse mock failed to start"
+          cat warehouse_mock.log
+          exit 1
+      - name: Stop Warehouse mock
+        if: always()
+        run: |
+          if [ -f warehouse_mock.pid ]; then
+            kill "$(cat warehouse_mock.pid)" || true
+          fi
+
+      - name: Run tests
+        env:
+          WAREHOUSE_BASE_URL: http://127.0.0.1:9000
+          WAREHOUSE_TIMEOUT_SECONDS: "2"
+          MAX_ATTEMPTS: "5"
+          RETRY_BASE_DELAY_SECONDS: "0.2"
+          DISPATCH_INTERVAL_SECONDS: "0.1"
+          DATABASE_URL: sqlite:///./test_order_relay.db
+        run: |
+          pytest tests/contract tests/candidate -v
