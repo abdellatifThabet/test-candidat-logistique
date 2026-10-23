@@ -486,9 +486,6 @@ git checkout -b feature/order-relay
 6. Wait for CI to pass.
 7. Merge your pull request once CI is green.
 
-Your Git history should show a coherent progression of your work. Avoid one
-giant final commit.
-
 ## Deliverables
 
 Your pull request must include:
