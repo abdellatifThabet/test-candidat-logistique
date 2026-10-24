@@ -93,16 +93,6 @@ You must design and implement the Order Relay Service yourself, including:
 You are free to choose your internal file structure. The existing `app/api/`,
 `app/services/` and `app/warehouse/` packages are suggestions, not requirements.
 
-## CI and expected initial failures
-
-A GitHub Actions workflow runs the contract tests on every pull request.
-
-Before implementing the service, most contract tests will fail because the
-`/orders` endpoints do not exist yet. This is expected.
-
-Your first pull request should implement the required service and make the
-contract tests pass. You must also add your own tests in `tests/candidate/`.
-
 ## Repository rules
 
 You must not modify:
