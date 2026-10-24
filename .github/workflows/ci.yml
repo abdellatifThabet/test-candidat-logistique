@@ -27,27 +27,23 @@ jobs:
       - name: Start Warehouse mock
         run: |
           nohup uvicorn warehouse_mock.main:app --host 127.0.0.1 --port 9000 > warehouse_mock.log 2>&1 &
-          echo $! > warehouse_mock.pid
 
           for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:9000/warehouse/docs > /dev/null; then
-              echo "Warehouse mock is ready"
+            if curl -sf http://127.0.0.1:9000/warehouse/docs > /dev/null; then
+              echo "Warehouse mock is ready."
               exit 0
             fi
+
             sleep 1
           done
 
-          echo "Warehouse mock failed to start"
+          echo "Warehouse mock failed to start."
           cat warehouse_mock.log
           exit 1
-      - name: Stop Warehouse mock
-        if: always()
-        run: |
-          if [ -f warehouse_mock.pid ]; then
-            kill "$(cat warehouse_mock.pid)" || true
-          fi
 
-      - name: Run tests
+      - name: Run contract and candidate tests
+        id: tests
+        continue-on-error: true
         env:
           WAREHOUSE_BASE_URL: http://127.0.0.1:9000
           WAREHOUSE_TIMEOUT_SECONDS: "2"
@@ -57,3 +53,69 @@ jobs:
           DATABASE_URL: sqlite:///./test_order_relay.db
         run: |
           pytest tests/contract tests/candidate -v
+
+      - name: Explain contract test failures
+        if: steps.tests.outcome == 'failure'
+        run: |
+          echo "::error::Contract tests failed."
+          echo "::error::This usually means that the Order Relay Service does not yet implement the behaviour required by README.md."
+          echo "::error::Check the failed pytest tests above: they describe the missing endpoints, statuses, retry behaviour or duplicate protection."
+          echo "::error::Implement the missing behaviour, add your own tests in tests/candidate/, then push again."
+
+      - name: Start Order Relay Service
+        if: steps.tests.outcome == 'success'
+        run: |
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > order_relay.log 2>&1 &
+
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "Order Relay Service is ready."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "Order Relay Service failed to start."
+          cat order_relay.log
+          exit 1
+
+      - name: Check additional required endpoints
+        if: steps.tests.outcome == 'success'
+        run: |
+          MISSING=$(python - <<'PY'
+          import json
+          import urllib.request
+
+          with urllib.request.urlopen("http://127.0.0.1:8000/openapi.json") as response:
+              openapi = json.load(response)
+
+          paths = openapi.get("paths", {})
+
+          required_paths = {
+              "/orders",
+              "/orders/{order_internal_id}",
+              "/orders/{order_internal_id}/retry",
+          }
+
+          missing = sorted(required_paths - paths.keys())
+
+          if missing:
+              print("\n".join(missing))
+          PY
+          )
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::Congratulations, the main contract tests pass."
+            echo "::error::However, we forgot to mention that the service must also expose these additional endpoints:"
+            echo "::error::$MISSING"
+            echo "::error::Please add them, keep the existing behaviour working, add relevant tests in tests/candidate/, then push again."
+            exit 1
+          fi
+
+          echo "All required endpoints are present."
+
+      - name: Fail CI if contract tests failed
+        if: steps.tests.outcome == 'failure'
+        run: |
+          exit 1
