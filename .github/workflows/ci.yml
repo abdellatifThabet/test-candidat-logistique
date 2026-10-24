@@ -80,7 +80,7 @@ jobs:
           cat order_relay.log
           exit 1
 
-      - name: Check additional required endpoints
+      - name: Check additional required endpoint
         if: steps.tests.outcome == 'success'
         run: |
           MISSING=$(python - <<'PY'
@@ -91,25 +91,20 @@ jobs:
               openapi = json.load(response)
 
           paths = openapi.get("paths", {})
+          required_path = "/orders/failed"
 
-          required_paths = {
-              "/orders",
-              "/orders/{order_internal_id}",
-              "/orders/{order_internal_id}/retry",
-          }
-
-          missing = sorted(required_paths - paths.keys())
-
-          if missing:
-              print("\n".join(missing))
+          if required_path not in paths:
+              print(required_path)
           PY
           )
 
           if [ -n "$MISSING" ]; then
             echo "::error::Congratulations, the main contract tests pass."
-            echo "::error::However, we forgot to mention that the service must also expose these additional endpoints:"
-            echo "::error::$MISSING"
-            echo "::error::Please add them, keep the existing behaviour working, add relevant tests in tests/candidate/, then push again."
+            echo "::error::However, we forgot to mention one additional requirement."
+            echo "::error::The service must also expose:"
+            echo "::error::GET $MISSING"
+            echo "::error::This endpoint must return all orders whose current status is FAILED."
+            echo "::error::Add the endpoint, add at least one relevant test in tests/candidate/, then push again."
             exit 1
           fi
 
