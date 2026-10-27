@@ -130,12 +130,21 @@ Your service must expose and persist the following statuses:
 
 ## Getting started
 
-### 1. Clone the repository
+### 1. Fork and clone the repository
+
+Fork this repository to your own GitHub account using the "Fork" button.
+
+Then clone your fork, replacing `YOUR_USERNAME` with your GitHub username:
 
 ```bash
-git clone https://github.com/movanex/test-candidat-logistique.git
+git clone https://github.com/YOUR_USERNAME/test-candidat-logistique.git
 cd test-candidat-logistique
 ```
+
+Your fork is your working copy. Do not attempt to push directly to the original
+repository.
+
+The remaining setup commands must be run from the root of your cloned fork.
 
 ### 2. Create a virtual environment
 
@@ -463,18 +472,56 @@ tests. The provided contract tests show the expected style and fixtures.
 
 ## Git workflow
 
-1. Clone the repository.
-2. Create a feature branch:
+Work in your own fork. You do not need write access to the original repository.
+
+1. Fork this repository to your own GitHub account.
+2. Clone your fork as described in "Getting started".
+3. Create a feature branch:
 
 ```bash
 git checkout -b feature/order-relay
 ```
 
-3. Commit regularly with clear messages.
-4. Push your branch to GitHub.
-5. Open a pull request targeting `main`.
-6. Wait for CI to pass.
-7. Merge your pull request once CI is green.
+4. Implement the service and run the tests locally.
+5. Check your changes and commit with clear messages:
+
+```bash
+git status
+git add .
+git commit -m "feat: implement order relay service"
+```
+
+6. Push the branch to your fork:
+
+```bash
+git push -u origin feature/order-relay
+```
+
+7. Open a pull request on GitHub with these settings:
+
+- Base repository: `movanex/test-candidat-logistique`
+- Base branch: `main`
+- Head repository: your fork
+- Compare branch: `feature/order-relay`
+
+8. Wait for CI to run. GitHub may require a maintainer to approve the workflow
+   before it starts. This is normal for contributions from forks. You can notify us if it takes too long to validate the approval.
+
+9. Read the CI results and implement any requested changes. Push additional
+   commits to the same branch:
+
+```bash
+git add .
+git commit -m "feat: address CI follow-up requirement"
+git push
+```
+
+Your existing pull request will update automatically. Do not create another
+pull request for corrections to the same submission.
+
+10. Once CI is green, leave the pull request open for review and send us its URL.
+
+You are not expected to merge the pull request into the original repository.
 
 ## Deliverables
 
