@@ -181,7 +181,7 @@ The default values work locally. You normally do not need to change them.
 | `WAREHOUSE_BASE_URL` | `http://127.0.0.1:9000` | Base URL of the Warehouse mock |
 | `WAREHOUSE_FAILURE_MODE` | `success` | Failure mode used by the Warehouse mock |
 | `WAREHOUSE_TIMEOUT_SECONDS` | `3` | Timeout for calls to the Warehouse |
-| `MAX_ATTEMPTS` | `5` | Maximum number of delivery attempts |
+| `MAX_ATTEMPTS` | `5` | Total number of delivery attempts, including the first attempt |
 | `DATABASE_URL` | `sqlite:///./order_relay.db` | Local SQLite database |
 
 ### 5. Start the Warehouse mock
@@ -207,6 +207,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Your service must be available at:
+
+Run this command from the repository root, with your virtual environment activated.
 
 ```text
 http://127.0.0.1:8000
@@ -504,8 +506,9 @@ git push -u origin feature/order-relay
 - Head repository: your fork
 - Compare branch: `feature/order-relay`
 
-8. Wait for CI to run. GitHub may require a maintainer to approve the workflow
-   before it starts. This is normal for contributions from forks. You can notify us if it takes too long to validate the approval.
+8. Wait for CI to run. GitHub may require a maintainer to approve the workflow before it starts. This is normal for contributions from forks.
+
+If the workflow is waiting for approval, notify us by sending the pull request URL.
 
 9. Read the CI results and implement any requested changes. Push additional
    commits to the same branch:
