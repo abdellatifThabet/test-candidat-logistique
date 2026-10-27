@@ -206,9 +206,10 @@ In a second terminal:
 uvicorn app.main:app --reload --port 8000
 ```
 
+Run this command from the repository root, with your virtual environment activated.
+
 Your service must be available at:
 
-Run this command from the repository root, with your virtual environment activated.
 
 ```text
 http://127.0.0.1:8000
