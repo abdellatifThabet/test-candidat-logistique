@@ -1,9 +1,12 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
+from app.api.orders import router as orders_router
 from app.db.database import init_db
+from app.services.worker import worker_loop
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("order-relay")
@@ -13,16 +16,14 @@ logger = logging.getLogger("order-relay")
 async def lifespan(app: FastAPI):
     init_db()
 
-    # TODO:
-    # Start any background processing mechanism you need.
-    #
-    # You may use FastAPI BackgroundTasks, an asyncio worker, or another
-    # simple mechanism, but orders must be persisted before being forwarded
-    # and must remain recoverable after a service restart.
+    # The worker polls the DB, so pending work resumes after a restart.
+    worker = asyncio.create_task(worker_loop())
 
     yield
 
-    # TODO: Stop your background worker cleanly if needed.
+    worker.cancel()
+    with suppress(asyncio.CancelledError):
+        await worker
 
 
 app = FastAPI(
@@ -31,10 +32,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# TODO:
-# Create your own router(s), for example in `app/api/orders.py`, then include
-# them here. The required endpoints are described in the README.
+app.include_router(orders_router)
 
 
 @app.get("/health")
